@@ -29,12 +29,20 @@ import CoreBluetooth
     The delegate of a remote peripheral receives callbacks when asynchronous events occur.
 */
 public protocol BKRemotePeripheralDelegate: class {
+
     /**
         Called when the remote peripheral updated its name.
         - parameter remotePeripheral: The remote peripheral that updated its name.
         - parameter name: The new name.
     */
     func remotePeripheral(_ remotePeripheral: BKRemotePeripheral, didUpdateName name: String)
+
+    /**
+     Called when services and charateristic are discovered and the device is ready for send/receive
+     - parameter remotePeripheral: The remote peripheral that is ready.
+     */
+    func remotePeripheralIsReady(_ remotePeripheral: BKRemotePeripheral)
+
 }
 
 /**
@@ -145,32 +153,34 @@ public class BKRemotePeripheral: BKRemotePeer, BKCBPeripheralDelegate {
         peripheralDelegate?.remotePeripheral(self, didUpdateName: name!)
     }
 
-    internal func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: NSError?) {
+    internal func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard let services = peripheral.services else {
             return
         }
         for service in services {
             if service.characteristics != nil {
-                self.peripheral(peripheral, didDiscoverCharacteristicsForService: service, error: nil)
+                self.peripheral(peripheral, didDiscoverCharacteristicsFor: service, error: nil)
             } else {
                 peripheral.discoverCharacteristics(configuration!.characteristicUUIDsForServiceUUID(service.uuid), for: service)
             }
         }
     }
 
-    internal func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsForService service: CBService, error: NSError?) {
+    internal func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         guard service.uuid == configuration!.dataServiceUUID, let dataCharacteristic = service.characteristics?.filter({ $0.uuid == configuration!.dataServiceCharacteristicUUID }).last else {
             return
         }
         characteristicData = dataCharacteristic
         peripheral.setNotifyValue(true, for: dataCharacteristic)
+        peripheralDelegate?.remotePeripheralIsReady(self)
     }
 
-    internal func peripheral(_ peripheral: CBPeripheral, didUpdateValueForCharacteristic characteristic: CBCharacteristic, error: NSError?) {
+    internal func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         guard characteristic.uuid == configuration!.dataServiceCharacteristicUUID else {
             return
         }
         handleReceivedData(characteristic.value!)
     }
+
 
 }
